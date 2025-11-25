@@ -1204,11 +1204,23 @@ def show_single_property(api_provider, api_key):
                     key="enhanced_desc_edit"
                 )
                 
+                # Update the enhanced description if edited
+                if enhanced_edited != st.session_state.enhanced_description:
+                    st.session_state.enhanced_description = enhanced_edited
+                
                 col_use1, col_use2 = st.columns(2)
                 with col_use1:
-                    if st.button("📋 Use This Version", key="use_enhanced"):
+                    use_enhanced = st.checkbox(
+                        "✅ Use Enhanced Version in Downloads", 
+                        value=st.session_state.get('use_enhanced', False),
+                        key="use_enhanced_checkbox"
+                    )
+                    if use_enhanced:
                         st.session_state.use_enhanced = True
-                        st.success("✅ Enhanced version will be used in downloads!")
+                        st.success("Enhanced version will be used in downloads!")
+                    else:
+                        st.session_state.use_enhanced = False
+                        
                 with col_use2:
                     if st.button("🔄 Generate Another", key="regenerate_enhanced"):
                         st.session_state.enhanced_description = None
@@ -1251,9 +1263,11 @@ def show_single_property(api_provider, api_key):
                     st.info("Generate enhanced version first to compare")
         
         # Determine which description to use for downloads
-        final_description = edited_description
-        if st.session_state.get('use_enhanced') and st.session_state.enhanced_description:
+        use_enhanced_version = st.session_state.get('use_enhanced', False)
+        if use_enhanced_version and st.session_state.enhanced_description:
             final_description = st.session_state.enhanced_description
+        else:
+            final_description = edited_description
         
         st.divider()
         
