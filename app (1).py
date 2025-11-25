@@ -429,6 +429,120 @@ def generate_description(property_data, api_provider, api_key=None, variation_se
     return generate_fallback(property_data)
 
 
+def generate_enhanced_description(original_desc, property_data, style, length, api_key):
+    """Generate an enhanced version of the description using AI"""
+    
+    # Map length selection to word count
+    length_map = {
+        "Medium (200-250 words)": "200-250 words",
+        "Long (300-350 words)": "300-350 words", 
+        "Extra Long (400-500 words)": "400-500 words"
+    }
+    target_length = length_map.get(length, "250-300 words")
+    
+    # Map style to instructions
+    style_instructions = {
+        "More Detailed & Elaborate": "Add more specific details about each feature, room descriptions, and practical benefits. Include sensory details about spaces, lighting, and ambiance.",
+        "More Emotional & Persuasive": "Use emotional triggers, create vivid lifestyle imagery, add aspirational language. Make the reader feel excited and create urgency.",
+        "More Professional & Formal": "Use sophisticated vocabulary, focus on specifications and value proposition. Suitable for corporate tenants and professionals.",
+        "Add Local Flavor & Culture": "Include references to local culture, nearby famous spots, local food scenes, and neighborhood character. Make it feel authentic to the location.",
+        "Focus on Investment Value": "Emphasize rental yield potential, appreciation prospects, location growth, infrastructure development, and smart financial decision aspects.",
+        "Luxury & Premium Feel": "Use upscale vocabulary, emphasize exclusivity, premium finishes, and sophisticated lifestyle. Make it feel like a luxury listing."
+    }
+    style_guide = style_instructions.get(style, "Make it more detailed and engaging.")
+    
+    # Build location string
+    location = f"{property_data['locality']}, {property_data['city']}"
+    if property_data.get('district'):
+        location += f", {property_data['district']}"
+    
+    prompt = f"""You are an expert real estate copywriter. Enhance the following property description.
+
+**ORIGINAL DESCRIPTION:**
+{original_desc}
+
+**PROPERTY QUICK INFO:**
+- {property_data['bhk']} BHK {property_data['property_type'].title()}
+- Location: {location}
+- Area: {property_data['area_sqft']} sq ft
+- Rent: ₹{property_data['rent_amount']:,}/month
+- Furnishing: {property_data['furnishing_status']}
+- Amenities: {', '.join(property_data.get('amenities', []))}
+
+**ENHANCEMENT STYLE:** {style}
+**STYLE INSTRUCTIONS:** {style_guide}
+
+**TARGET LENGTH:** {target_length}
+
+**REQUIREMENTS:**
+1. Keep all factual information accurate
+2. Maintain the core message but enhance the presentation
+3. Add more vivid descriptions and emotional appeal
+4. Include specific benefits for the target tenant
+5. Create a stronger call-to-action
+6. Make it unique and memorable
+7. Follow the style instructions closely
+
+**IMPORTANT:** 
+- Return ONLY the enhanced description text
+- Do NOT include any headers, labels, or formatting
+- Do NOT start with "Here is" or similar phrases
+- Just write the enhanced property description directly
+"""
+
+    try:
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key.strip()}"
+            },
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": f"You are an expert real estate copywriter specializing in {style.lower()}. Enhance property descriptions to be more compelling while keeping facts accurate. Return only the enhanced description text, nothing else."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "temperature": 0.8,
+                "max_tokens": 1500,
+                "top_p": 0.9
+            },
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            enhanced = result['choices'][0]['message']['content'].strip()
+            
+            # Clean up any unwanted prefixes
+            unwanted_prefixes = [
+                "Here is the enhanced description:",
+                "Here's the enhanced version:",
+                "Enhanced description:",
+                "Enhanced version:",
+                "Here is",
+                "Here's"
+            ]
+            for prefix in unwanted_prefixes:
+                if enhanced.lower().startswith(prefix.lower()):
+                    enhanced = enhanced[len(prefix):].strip()
+            
+            return enhanced
+        else:
+            st.error(f"❌ API Error: {response.status_code}")
+            return None
+            
+    except Exception as e:
+        st.error(f"❌ Error: {str(e)}")
+        return None
+
+
 # ==================== MAIN APP ====================
 def main():
     st.title("🏠 AI Property Description Generator")
@@ -441,6 +555,10 @@ def main():
         st.session_state.property_data = None
     if 'generation_count' not in st.session_state:
         st.session_state.generation_count = 0
+    if 'enhanced_description' not in st.session_state:
+        st.session_state.enhanced_description = None
+    if 'use_enhanced' not in st.session_state:
+        st.session_state.use_enhanced = False
     
     # Sidebar
     with st.sidebar:
@@ -475,7 +593,7 @@ def main():
         
         st.divider()
         
-        # API Info
+        # Feature Info
         with st.expander("ℹ️ About Regenerate Feature"):
             st.markdown("""
             **🔄 Regenerate Feature:**
@@ -489,12 +607,34 @@ def main():
               5. 👨‍👩‍👧 Community & Safety
             - No need to re-enter details
             - Pick the best version!
+            """)
+        
+        with st.expander("✨ About Enhanced Description"):
+            st.markdown("""
+            **🚀 Enhanced Description Feature:**
+            
+            After generating, you can create an **enhanced version** with:
+            
+            **Enhancement Styles:**
+            - 📝 More Detailed & Elaborate
+            - 💖 More Emotional & Persuasive
+            - 👔 More Professional & Formal
+            - 🏛️ Add Local Flavor & Culture
+            - 💰 Focus on Investment Value
+            - 👑 Luxury & Premium Feel
+            
+            **Target Lengths:**
+            - Medium: 200-250 words
+            - Long: 300-350 words
+            - Extra Long: 400-500 words
             
             **How to use:**
-            1. Fill form and click Generate
-            2. See Version #1
-            3. Click Regenerate for Version #2
-            4. Keep clicking for more versions
+            1. Generate initial description
+            2. Go to "AI Enhanced Version" tab
+            3. Select style & length
+            4. Click "Generate Enhanced Version"
+            5. Compare with original
+            6. Click "Use This Version" to use in downloads
             """)
     
     show_single_property(api_provider, api_key)
@@ -915,6 +1055,8 @@ def show_single_property(api_provider, api_key):
     if clear_clicked:
         st.session_state.generated_result = None
         st.session_state.generation_count = 0
+        st.session_state.enhanced_description = None
+        st.session_state.use_enhanced = False
         st.rerun()
     
     # Handle generation
@@ -924,6 +1066,8 @@ def show_single_property(api_provider, api_key):
             return
         
         st.session_state.property_data = property_data
+        st.session_state.enhanced_description = None  # Reset enhanced on new generation
+        st.session_state.use_enhanced = False
         
         if regenerate_clicked:
             st.session_state.generation_count += 1
@@ -993,16 +1137,123 @@ def show_single_property(api_provider, api_key):
         
         st.divider()
         
-        # Editable Full Description
+        # Editable Full Description with Enhanced Version
         st.markdown("### 📝 Full Description")
-        st.info("💡 **Tip:** Edit the description below as needed. Your changes will be saved in downloads.")
-        edited_description = st.text_area(
-            "Description (Edit as needed)",
-            value=result['full_description'],
-            height=200,
-            key="edit_description",
-            help="Click to edit the generated description"
-        )
+        
+        desc_tab1, desc_tab2, desc_tab3 = st.tabs(["✏️ Edit Description", "🔄 AI Enhanced Version", "📊 Compare Versions"])
+        
+        with desc_tab1:
+            st.info("💡 **Tip:** Edit the description below as needed. Your changes will be saved in downloads.")
+            edited_description = st.text_area(
+                "Description (Edit as needed)",
+                value=result['full_description'],
+                height=250,
+                key="edit_description",
+                help="Click to edit the generated description"
+            )
+        
+        with desc_tab2:
+            st.markdown("#### 🚀 AI Enhanced Version")
+            st.caption("Click below to generate an enhanced, more detailed version of the description")
+            
+            # Initialize enhanced description in session state
+            if 'enhanced_description' not in st.session_state:
+                st.session_state.enhanced_description = None
+            
+            col_enhance1, col_enhance2 = st.columns([1, 1])
+            
+            with col_enhance1:
+                enhance_style = st.selectbox(
+                    "Enhancement Style",
+                    ["More Detailed & Elaborate", "More Emotional & Persuasive", "More Professional & Formal", 
+                     "Add Local Flavor & Culture", "Focus on Investment Value", "Luxury & Premium Feel"],
+                    key="enhance_style"
+                )
+            
+            with col_enhance2:
+                enhance_length = st.selectbox(
+                    "Target Length",
+                    ["Medium (200-250 words)", "Long (300-350 words)", "Extra Long (400-500 words)"],
+                    key="enhance_length"
+                )
+            
+            if st.button("✨ Generate Enhanced Version", type="primary", key="enhance_btn"):
+                if api_key:
+                    with st.spinner("🚀 Enhancing description with AI..."):
+                        enhanced = generate_enhanced_description(
+                            original_desc=result['full_description'],
+                            property_data=property_data,
+                            style=enhance_style,
+                            length=enhance_length,
+                            api_key=api_key
+                        )
+                        if enhanced:
+                            st.session_state.enhanced_description = enhanced
+                            st.success("✅ Enhanced version generated!")
+                else:
+                    st.error("❌ Please enter Groq API key in sidebar to use AI enhancement")
+            
+            # Display enhanced version if available
+            if st.session_state.enhanced_description:
+                st.markdown("---")
+                st.markdown("**Enhanced Description:**")
+                enhanced_edited = st.text_area(
+                    "Enhanced Version (Editable)",
+                    value=st.session_state.enhanced_description,
+                    height=300,
+                    key="enhanced_desc_edit"
+                )
+                
+                col_use1, col_use2 = st.columns(2)
+                with col_use1:
+                    if st.button("📋 Use This Version", key="use_enhanced"):
+                        st.session_state.use_enhanced = True
+                        st.success("✅ Enhanced version will be used in downloads!")
+                with col_use2:
+                    if st.button("🔄 Generate Another", key="regenerate_enhanced"):
+                        st.session_state.enhanced_description = None
+                        st.rerun()
+            else:
+                st.info("👆 Click 'Generate Enhanced Version' to create an improved description")
+        
+        with desc_tab3:
+            st.markdown("#### 📊 Compare: Original vs Enhanced")
+            
+            compare_col1, compare_col2 = st.columns(2)
+            
+            with compare_col1:
+                st.markdown("**🔵 Original AI Generated:**")
+                st.text_area(
+                    "Original",
+                    value=result['full_description'],
+                    height=250,
+                    disabled=True,
+                    key="compare_original",
+                    label_visibility="collapsed"
+                )
+                word_count_orig = len(result['full_description'].split())
+                st.caption(f"📏 Word Count: {word_count_orig}")
+            
+            with compare_col2:
+                st.markdown("**🟢 Enhanced Version:**")
+                if st.session_state.enhanced_description:
+                    st.text_area(
+                        "Enhanced",
+                        value=st.session_state.enhanced_description,
+                        height=250,
+                        disabled=True,
+                        key="compare_enhanced",
+                        label_visibility="collapsed"
+                    )
+                    word_count_enh = len(st.session_state.enhanced_description.split())
+                    st.caption(f"📏 Word Count: {word_count_enh} ({word_count_enh - word_count_orig:+d} words)")
+                else:
+                    st.info("Generate enhanced version first to compare")
+        
+        # Determine which description to use for downloads
+        final_description = edited_description
+        if st.session_state.get('use_enhanced') and st.session_state.enhanced_description:
+            final_description = st.session_state.enhanced_description
         
         st.divider()
         
@@ -1048,7 +1299,7 @@ def show_single_property(api_provider, api_key):
         edited_result = {
             'title': edited_title,
             'teaser_text': edited_teaser,
-            'full_description': edited_description,
+            'full_description': final_description,  # Uses enhanced version if selected
             'bullet_points': edited_bullets,
             'seo_keywords': edited_keywords_list,
             'meta_title': edited_meta_title,
