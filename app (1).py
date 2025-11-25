@@ -559,6 +559,8 @@ def main():
         st.session_state.enhanced_description = None
     if 'use_enhanced' not in st.session_state:
         st.session_state.use_enhanced = False
+    if 'enhanced_edit_mode' not in st.session_state:
+        st.session_state.enhanced_edit_mode = False
     
     # Sidebar
     with st.sidebar:
@@ -1057,6 +1059,7 @@ def show_single_property(api_provider, api_key):
         st.session_state.generation_count = 0
         st.session_state.enhanced_description = None
         st.session_state.use_enhanced = False
+        st.session_state.enhanced_edit_mode = False
         st.rerun()
     
     # Handle generation
@@ -1068,6 +1071,7 @@ def show_single_property(api_provider, api_key):
         st.session_state.property_data = property_data
         st.session_state.enhanced_description = None  # Reset enhanced on new generation
         st.session_state.use_enhanced = False
+        st.session_state.enhanced_edit_mode = False
         
         if regenerate_clicked:
             st.session_state.generation_count += 1
@@ -1197,34 +1201,64 @@ def show_single_property(api_provider, api_key):
             if st.session_state.enhanced_description:
                 st.markdown("---")
                 st.markdown("**Enhanced Description:**")
-                enhanced_edited = st.text_area(
-                    "Enhanced Version (Editable)",
-                    value=st.session_state.enhanced_description,
-                    height=300,
-                    key="enhanced_desc_edit"
-                )
                 
-                # Update the enhanced description if edited
-                if enhanced_edited != st.session_state.enhanced_description:
-                    st.session_state.enhanced_description = enhanced_edited
+                # Initialize edit mode in session state
+                if 'enhanced_edit_mode' not in st.session_state:
+                    st.session_state.enhanced_edit_mode = False
                 
-                col_use1, col_use2 = st.columns(2)
-                with col_use1:
-                    use_enhanced = st.checkbox(
-                        "✅ Use Enhanced Version in Downloads", 
-                        value=st.session_state.get('use_enhanced', False),
-                        key="use_enhanced_checkbox"
+                # Show either view mode or edit mode
+                if st.session_state.enhanced_edit_mode:
+                    # Edit Mode - Editable text area
+                    st.info("✏️ **Edit Mode** - Make your changes below")
+                    enhanced_edited = st.text_area(
+                        "Edit Enhanced Version",
+                        value=st.session_state.enhanced_description,
+                        height=300,
+                        key="enhanced_desc_edit"
                     )
-                    if use_enhanced:
-                        st.session_state.use_enhanced = True
-                        st.success("Enhanced version will be used in downloads!")
-                    else:
-                        st.session_state.use_enhanced = False
-                        
-                with col_use2:
-                    if st.button("🔄 Generate Another", key="regenerate_enhanced"):
-                        st.session_state.enhanced_description = None
-                        st.rerun()
+                    
+                    col_save, col_cancel = st.columns(2)
+                    with col_save:
+                        if st.button("💾 Save Changes", type="primary", key="save_enhanced_edit"):
+                            st.session_state.enhanced_description = enhanced_edited
+                            st.session_state.enhanced_edit_mode = False
+                            st.rerun()
+                    with col_cancel:
+                        if st.button("❌ Cancel", key="cancel_enhanced_edit"):
+                            st.session_state.enhanced_edit_mode = False
+                            st.rerun()
+                else:
+                    # View Mode - Read only display
+                    st.markdown(f"""
+                    <div style="background-color: #f0f2f6; padding: 15px; border-radius: 10px; border-left: 4px solid #4CAF50;">
+                    {st.session_state.enhanced_description}
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    word_count = len(st.session_state.enhanced_description.split())
+                    st.caption(f"📏 Word Count: {word_count}")
+                    
+                    # Action buttons
+                    col_edit, col_use, col_regen = st.columns(3)
+                    with col_edit:
+                        if st.button("✏️ Edit", key="edit_enhanced_btn"):
+                            st.session_state.enhanced_edit_mode = True
+                            st.rerun()
+                    with col_use:
+                        use_enhanced = st.checkbox(
+                            "✅ Use in Downloads", 
+                            value=st.session_state.get('use_enhanced', False),
+                            key="use_enhanced_checkbox"
+                        )
+                        if use_enhanced:
+                            st.session_state.use_enhanced = True
+                        else:
+                            st.session_state.use_enhanced = False
+                    with col_regen:
+                        if st.button("🔄 Regenerate", key="regenerate_enhanced"):
+                            st.session_state.enhanced_description = None
+                            st.session_state.enhanced_edit_mode = False
+                            st.rerun()
             else:
                 st.info("👆 Click 'Generate Enhanced Version' to create an improved description")
         
