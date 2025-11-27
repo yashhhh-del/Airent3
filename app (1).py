@@ -678,7 +678,7 @@ def show_single_property(api_provider, api_key):
                 min_value=100,
                 max_value=50000,
                 value=1000,
-                step=50,
+                step=200,
                 help="Total built-up area of the property",
                 key="area_input"
             )
@@ -773,9 +773,9 @@ def show_single_property(api_provider, api_key):
             rent = st.number_input(
                 "Monthly Rent (₹) *",
                 min_value=1000,
-                max_value=10000000,
-                value=25000,
-                step=1000,
+                max_value=10000000000,
+                value=30000,
+                step=5000,
                 help="Monthly rental amount",
                 key="rent_input"
             )
