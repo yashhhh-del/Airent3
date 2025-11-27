@@ -659,7 +659,7 @@ def show_single_property(api_provider, api_key):
             property_type = st.selectbox(
                 "Property Type *",
                 ["Flat", "Villa", "Independent House", "PG/Hostel", "Shop", "Office Space", 
-                 "Warehouse", "Land/Plot", "Studio Apartment", "Penthouse"],
+                 "Warehouse", "Land/Plot", "Studio Apartment", "Penthouse" , "Plot" , "Agricultural Land" , " Residential " , " Commercial " , "Industrial " , " Institutional"],
                 help="Select the type of property",
                 key="prop_type_select"
             )
